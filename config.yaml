@@ -1,0 +1,8 @@
+scan:
+  timeout: 1.5
+  max_threads: 200
+  common_ports: [21, 22, 23, 25, 53, 80, 110, 143, 443, 465, 587, 993, 995, 3389]
+
+geolocation:
+  api: "ip-api"  # Options: ip-api, ipinfo, maxmind
+  maxmind_db: "GeoLite2-City.mmdb"  # Required if using MaxMind

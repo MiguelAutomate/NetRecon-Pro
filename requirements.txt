@@ -1,0 +1,5 @@
+requests==2.31.0
+pyyaml==6.0.1
+geoip2==4.8.0
+asyncio==3.4.3
+python-whois==0.8.0
