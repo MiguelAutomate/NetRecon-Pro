@@ -1,0 +1,3 @@
+[console_scripts]
+netrecon = netrecon:main
+netrecon-gui = gui:main
