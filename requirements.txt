@@ -3,3 +3,5 @@ pyyaml==6.0.1
 geoip2==4.8.0
 asyncio==3.4.3
 python-whois==0.8.0
+dnspython==2.6.1
+customtkinter==5.2.2

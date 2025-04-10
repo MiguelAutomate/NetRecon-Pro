@@ -11,7 +11,10 @@ import socket
 import time
 from datetime import datetime
 from typing import List, Dict, Union
-
+import subprocess
+import ssl
+import dns.resolver
+import whois
 import requests
 import yaml
 from geoip2.database import Reader
@@ -27,12 +30,116 @@ logger = logging.getLogger("netrecon")
 with open("config.yaml") as f:
     config = yaml.safe_load(f)
 
+class ScanTools:
+    """Collection of network scanning and reconnaissance tools"""
+    
+    def __init__(self):
+        self.timeout = config["scan"]["timeout"]
+    
+    async def ping(self, target: str) -> Dict:
+        """Perform ICMP ping to check host availability"""
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                'ping', '-c', '3', target,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            stdout, _ = await proc.communicate()
+            return {
+                "success": proc.returncode == 0,
+                "output": stdout.decode()
+            }
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    async def traceroute(self, target: str) -> Dict:
+        """Perform traceroute to show network path"""
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                'traceroute', target,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            stdout, _ = await proc.communicate()
+            return {
+                "success": proc.returncode == 0,
+                "output": stdout.decode()
+            }
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    async def nmap_scan(self, target: str, ports: str = None, aggressive: bool = False) -> Dict:
+        """Perform port scan using nmap"""
+        try:
+            cmd = ['nmap', '-oX', '-']
+            if aggressive:
+                cmd.extend(['-sV', '-sC'])
+            if ports:
+                cmd.extend(['-p', ports])
+            cmd.append(target)
+            
+            proc = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            stdout, _ = await proc.communicate()
+            return {
+                "success": proc.returncode == 0,
+                "output": stdout.decode()
+            }
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    async def ssl_scan(self, target: str) -> Dict:
+        """Check SSL/TLS configuration"""
+        try:
+            ctx = ssl.create_default_context()
+            with ctx.wrap_socket(socket.socket(), server_hostname=target) as s:
+                s.connect((target, 443))
+                cert = s.getpeercert()
+                return {
+                    "success": True,
+                    "version": s.version(),
+                    "cipher": s.cipher(),
+                    "certificate": cert
+                }
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    async def nslookup(self, target: str) -> Dict:
+        """Perform DNS lookups"""
+        try:
+            resolver = dns.resolver.Resolver()
+            results = {}
+            for record_type in ['A', 'AAAA', 'MX', 'NS', 'TXT']:
+                try:
+                    answers = resolver.resolve(target, record_type)
+                    results[record_type] = [str(rdata) for rdata in answers]
+                except Exception:
+                    results[record_type] = []
+            return {"success": True, "records": results}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    async def whois_lookup(self, target: str) -> Dict:
+        """Perform WHOIS lookup"""
+        try:
+            result = whois.whois(target)
+            return {
+                "success": True,
+                "data": result
+            }
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
 class NetRecon:
     def __init__(self):
         self.timeout = config["scan"]["timeout"]
         self.max_threads = config["scan"]["max_threads"]
         self.common_ports = config["scan"]["common_ports"]
         self.geoip_reader = Reader(config["geolocation"]["maxmind_db"]) if config["geolocation"].get("maxmind_db") else None
+        self.tools = ScanTools()
 
     async def async_scan_port(self, ip: str, port: int) -> Union[int, None]:
         """Asynchronous port scanner with rate limiting"""
@@ -109,6 +216,43 @@ class NetRecon:
             logger.info(f"Results saved to {filename}")
         except Exception as e:
             logger.error(f"Failed to save results: {e}")
+
+    async def comprehensive_scan(self, target: str, scan_type: str = "all", ports: str = None, aggressive: bool = False) -> Dict:
+        """Perform a comprehensive scan or specific scan type"""
+        results = {
+            "target": target,
+            "timestamp": datetime.now().isoformat(),
+            "scan_type": scan_type,
+            "results": {}
+        }
+        
+        try:
+            if scan_type in ["all", "ping"]:
+                results["results"]["ping"] = await self.tools.ping(target)
+                
+            if scan_type in ["all", "traceroute"]:
+                results["results"]["traceroute"] = await self.tools.traceroute(target)
+                
+            if scan_type in ["all", "nmap"]:
+                results["results"]["nmap"] = await self.tools.nmap_scan(target, ports, aggressive)
+                
+            if scan_type in ["all", "ssl"]:
+                results["results"]["ssl"] = await self.tools.ssl_scan(target)
+                
+            if scan_type in ["all", "dns"]:
+                results["results"]["dns"] = await self.tools.nslookup(target)
+                
+            if scan_type in ["all", "whois"]:
+                results["results"]["whois"] = await self.tools.whois_lookup(target)
+                
+            # Add geolocation data if available
+            results["results"]["geolocation"] = self.get_geolocation(target)
+            
+        except Exception as e:
+            logger.error(f"Scan error: {e}")
+            results["error"] = str(e)
+            
+        return results
 
 async def main():
     parser = argparse.ArgumentParser(description="NetRecon Pro - Network Scanner")

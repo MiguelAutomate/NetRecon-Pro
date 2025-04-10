@@ -5,4 +5,4 @@ scan:
 
 geolocation:
   api: "ip-api"  # Options: ip-api, ipinfo, maxmind
-  maxmind_db: "GeoLite2-City.mmdb"  # Required if using MaxMind
+  maxmind_db: null  # Required only if using MaxMind
