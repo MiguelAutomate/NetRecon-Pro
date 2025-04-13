@@ -1,8 +1,0 @@
-{
-    "target": "146.70.174.69",
-    "timestamp": "2025-04-10T01:10:59.107795",
-    "nmap": {
-        "status": "error",
-        "output": "Error during command: \"/usr/bin/nmap -v -oX - 146.70.174.69 -p80 -sS\"\n\nYou requested a scan type which requires root privileges.\nQUITTING!\n"
-    }
-}
